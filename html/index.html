@@ -3,67 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Biodiversity Indices Calculator</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <title>Biodiversity Calculator</title>
   <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f4f6f9;
-      padding: 20px;
-      color: #333;
-    }
-    .container {
-      max-width: 700px;
-      margin: auto;
-      background: #fff;
-      padding: 30px;
-      border-radius: 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    h1 {
-      text-align: center;
-      color: #006d77;
-    }
-    textarea {
-      width: 100%;
-      height: 150px;
-      margin: 15px 0;
-      padding: 10px;
-      font-size: 1rem;
-    }
-    button {
-      background: #006d77;
-      color: #fff;
-      padding: 10px 20px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-right: 10px;
-    }
-    button:hover {
-      background: #004e57;
-    }
-    .result {
-      margin-top: 20px;
-      padding: 20px;
-      background: #e0f7fa;
-      border-radius: 10px;
-    }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f0f0; padding: 20px; }
+    .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    textarea { width: 100%; height: 120px; margin: 10px 0; padding: 10px; font-size: 1rem; }
+    button { padding: 10px 15px; background: #006d77; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    .result { margin-top: 20px; background: #e0f7fa; padding: 15px; border-radius: 10px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Biodiversity Indices Calculator</h1>
-    <p>Enter species and count like this (one per line):<br><code>Species_A: 30</code></p>
-    <textarea id="inputData" placeholder="Species_A: 30&#10;Species_B: 15&#10;Species_C: 5"></textarea>
-    <div>
-      <button onclick="calculate()">Calculate</button>
-      <button onclick="downloadPDF()">Download PDF</button>
-    </div>
+    <p>Enter species and count (e.g., <code>Species_A: 30</code>):</p>
+    <textarea id="inputData"></textarea>
+    <button onclick="calculate()">Calculate & Submit</button>
 
-    <div class="result" id="results" style="display:none;">
+    <div id="results" class="result" style="display: none;">
       <h2>Results:</h2>
       <p id="output"></p>
     </div>
@@ -87,39 +43,41 @@
       const counts = parseInput(inputText);
       const N = Object.values(counts).reduce((a, b) => a + b, 0);
       const S = Object.keys(counts).length;
-      const shannon_H = -Object.values(counts).reduce((sum, n) => sum + (n / N) * Math.log(n / N), 0);
-      const simpson_D = 1 - Object.values(counts).reduce((sum, n) => sum + (n * (n - 1)) / (N * (N - 1)), 0);
-      const evenness = S > 1 ? shannon_H / Math.log(S) : 0;
+      const shannon = -Object.values(counts).reduce((sum, n) => sum + (n/N) * Math.log(n/N), 0);
+      const simpson = 1 - Object.values(counts).reduce((sum, n) => sum + (n * (n - 1)) / (N * (N - 1)), 0);
+      const evenness = S > 1 ? shannon / Math.log(S) : 0;
 
-      const output = `
+      const outputText = `
         <strong>Total Individuals (N):</strong> ${N}<br>
         <strong>Species Richness (S):</strong> ${S}<br>
-        <strong>Shannon Index (H'):</strong> ${shannon_H.toFixed(4)}<br>
-        <strong>Simpson Index (D):</strong> ${simpson_D.toFixed(4)}<br>
+        <strong>Shannon Index (H'):</strong> ${shannon.toFixed(4)}<br>
+        <strong>Simpson Index (D):</strong> ${simpson.toFixed(4)}<br>
         <strong>Evenness (E):</strong> ${evenness.toFixed(4)}
       `;
 
-      document.getElementById("output").innerHTML = output;
+      document.getElementById("output").innerHTML = outputText;
       document.getElementById("results").style.display = "block";
-    }
 
-    async function downloadPDF() {
-      const resultsDiv = document.getElementById("results");
-      if (!resultsDiv || resultsDiv.style.display === "none") {
-        alert("Please calculate first.");
-        return;
-      }
+      // Send to Google Sheet
+      const data = {
+        species_data: inputText,
+        total_individuals: N,
+        species_richness: S,
+        shannon_index: shannon.toFixed(4),
+        simpson_index: simpson.toFixed(4),
+        evenness: evenness.toFixed(4)
+      };
 
-      const canvas = await html2canvas(resultsDiv);
-      const imgData = canvas.toDataURL("image/png");
-
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF();
-      pdf.setFont("Helvetica", "bold");
-      pdf.setFontSize(18);
-      pdf.text("Biodiversity Indices Report", 20, 20);
-      pdf.addImage(imgData, "PNG", 15, 30, 180, 60);
-      pdf.save("Biodiversity_Report.pdf");
+      fetch("https://script.google.com/macros/s/AKfycbzzP4CfG-Vy8QSDH_1o1mzPhuLerPU5oFrNZ9BfLyQGWRH5v-b8QlDQCvtrO9Mxz7yl/exec", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data)
+      })
+      .then(response => response.text())
+      .then(msg => console.log("Google Sheet Response:", msg))
+      .catch(err => console.error("Error sending to Google Sheets:", err));
     }
   </script>
 </body>
